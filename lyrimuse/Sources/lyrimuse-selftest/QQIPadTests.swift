@@ -158,7 +158,7 @@ func runQQIPadTests() {
         }
         let client = sourceText("LyrimuseCore/Local/MediaControlClient.swift")
         expectEqual([sourceHas(client, "let qqNames = QQIPadNowPlaying.normalized("),
-                     sourceHas(client, "album = qqNames.album"),
+                     sourceHas(client, "album: qqNames.album"),
                      sourceHas(client, "(keyTitle, keyArtist) = QQIPadNowPlaying.names(title: keyTitle, artist: keyArtist, bundleID: raw.bundleIdentifier)")],
                     [true, true, true], "iPad QQ 接线: 轮询解码、取封面那一路整理")
         let probe = sourceText("LyrimuseCore/Local/NowPlayingClientsProbe.swift")

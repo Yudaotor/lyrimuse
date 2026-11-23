@@ -1680,9 +1680,13 @@ public enum MediaControlClient {
             // iPad 版 QQ 音乐改写成「歌名 — 歌手」、专辑空的那一帧还原(见 QQIPadNowPlaying)。
             let qqNames = QQIPadNowPlaying.normalized(
                 .init(title: names.title, artist: names.artist, album: reportedAlbum), bundleID: bundleIdentifier)
-            title = qqNames.title
-            artist = qqNames.artist
-            album = qqNames.album
+            // iPad 版酷狗自然连播偶尔只换时长、不报新歌名,按引擎读的队列认出这一首,认不出报空(见 KugouIPadTitleRepair)。
+            let kugouNames = KugouIPadTitleRepair.repaired(
+                .init(title: qqNames.title, artist: qqNames.artist, album: qqNames.album, duration: names.duration),
+                elapsed: names.elapsed, timestamp: MediaControlClient.parseTimestamp(times.timestamp), bundleID: bundleIdentifier)
+            title = kugouNames.title
+            artist = kugouNames.artist
+            album = kugouNames.album
             duration = names.duration
             var lead = 0.0
             if let normalized = names.elapsed, let reported = times.elapsedTime { lead = normalized - reported }

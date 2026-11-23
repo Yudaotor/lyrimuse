@@ -21,6 +21,14 @@ func runKugouIPadTests() {
         expectEqual(PlayerProcess.pid(bundleID: mac), nil, "iPad 酷狗进程: 会话是 iPad 版报的,不去找 Mac 版的进程(不按它的菜单)")
         expectEqual(L.resumeReadingNeverLeads(bundleID: mac, client: K.bundleID), true, "iPad 酷狗位置: 恢复那一拍原样采信")
         expectEqual(L.resumeReadingNeverLeads(bundleID: mac, client: mac), false, "iPad 酷狗位置: Mac 版照旧")
+        expectEqual(PlayerBundleAliases.isInstalledForContainerReads(.kugou) { $0 == K.bundleID }, true,
+                    "iPad 酷狗权限: 只装了 iPad 版时完全磁盘访问那一行也算装了(引擎读它的容器)")
+        expectEqual(PlayerBundleAliases.isInstalledForContainerReads(.kugou) { $0 == mac }, true, "iPad 酷狗权限: Mac 版照旧")
+        expectEqual(PlayerBundleAliases.isInstalledForContainerReads(.netease) { $0 == NetEaseIPadNowPlaying.bundleID }, false,
+                    "iPad 酷狗权限: 引擎不读容器的 iPad 版网易云不算")
+        expectEqual(PlayerBundleAliases.isInstalledForContainerReads(.kugou) { _ in false }, false, "iPad 酷狗权限: 都没装不算")
+        expectEqual(PlayerBundleAliases.isInstalledForContainerReads(.netease) { $0 == K.bundleID }, false,
+                    "iPad 酷狗权限: 只算到酷狗那一行")
     }
 
     // ---- 「播放」恢复只换时间戳:按录到的真实序列 ----
@@ -204,6 +212,112 @@ func runKugouIPadTests() {
         expectEqual(K.normalizedPayload(other), other, "iPad 酷狗单问: 别的播放器原样")
     }
 
+    // ---- 自然连播不报新歌名:按录到的真实序列(随机模式三次之一) ----
+    do {
+        typealias R = KugouIPadTitleRepair
+        typealias N = KugouIPadTitleRepair.Names
+        var seen: R.Seen?
+        var pending: R.Pending?
+        var queue: R.Queue?
+        var asked = 0
+        func r(_ names: N, elapsed: Double, ts: Double, now: Double) -> N {
+            R.repaired(names, elapsed: elapsed, timestamp: at(ts), now: at(now), seen: &seen, pending: &pending,
+                       queue: { asked += 1; return queue })
+        }
+        let old = N(title: "开始懂了", artist: "孙燕姿", album: "我要的幸福", duration: 271.493011)
+        var next = old
+        next.duration = 239.095001
+        let listened = R.Song(title: "听说你", artist: "于冬然", album: "听说你", seconds: 239)
+        queue = R.Queue(songs: [R.Song(title: "开始懂了", artist: "孙燕姿", album: "我要的幸福", seconds: 271),
+                                R.Song(title: "安和桥", artist: "宋冬野", album: "安和桥北", seconds: 251), listened])
+        expectEqual(r(old, elapsed: 267, ts: 17.6, now: 18), old, "iPad 酷狗换歌名: 平常的帧原样")
+        expectEqual(r(next, elapsed: 0.151, ts: 22.8, now: 23.2), next, "iPad 酷狗换歌名: 旧歌名下换了时长的那份锚点,宽限期内原样(两步式的新歌名还会来)")
+        expectEqual(asked, 0, "iPad 酷狗换歌名: 宽限期内不读名单")
+        expectEqual(r(next, elapsed: 0.151, ts: 22.8, now: 25),
+                    N(title: "听说你", artist: "于冬然", album: "听说你", duration: 239.095001),
+                    "iPad 酷狗换歌名: 过了宽限期还是旧歌名,按时长在队列里认出这一首")
+        expectEqual(r(next, elapsed: 0.151, ts: 22.8, now: 27).title, "听说你", "iPad 酷狗换歌名: 之后每拍照样认")
+        let real = N(title: "听说你", artist: "于冬然", album: "听说你", duration: 239.095001)
+        expectEqual(r(real, elapsed: 10.431, ts: 33.1, now: 33.2), real, "iPad 酷狗换歌名: 暂停时真名到了就作罢")
+        expectEqual(pending == nil, true, "iPad 酷狗换歌名: 真名到了清掉记着的那份")
+
+        seen = nil
+        pending = nil
+        queue = nil
+        _ = r(old, elapsed: 267, ts: 17.6, now: 18)
+        _ = r(next, elapsed: 0.151, ts: 22.8, now: 23.2)
+        expectEqual(r(next, elapsed: 0.151, ts: 22.8, now: 25), N(title: nil, artist: nil, album: nil, duration: 239.095001),
+                    "iPad 酷狗换歌名: 没有名单(没授完全磁盘访问)时报空,不拿上一首往下走")
+
+        seen = nil
+        pending = nil
+        _ = r(old, elapsed: 267, ts: 17.6, now: 18)
+        _ = r(next, elapsed: 0.151, ts: 22.8, now: 23.2)
+        let twoStep = N(title: "听说你", artist: "于冬然", album: "听说你", duration: 239.095001)
+        expectEqual(r(twoStep, elapsed: 0.48, ts: 23.5, now: 23.6), twoStep, "iPad 酷狗换歌名: 两步式新歌名按时到,原样")
+        expectEqual(r(twoStep, elapsed: 0.48, ts: 23.5, now: 30), twoStep, "iPad 酷狗换歌名: 之后不再动它")
+
+        seen = nil
+        pending = nil
+        queue = R.Queue(songs: [R.Song(title: "开始懂了", artist: "孙燕姿", album: "我要的幸福", seconds: 271)])
+        _ = r(old, elapsed: 10, ts: 10, now: 10)
+        var seeked = old
+        seeked.duration = 271.493011
+        expectEqual(r(seeked, elapsed: 0.1, ts: 20, now: 30), seeked, "iPad 酷狗换歌名: 时长没变的回到开头(单曲循环、拖回开头)不算")
+        var late = old
+        late.duration = 239.095001
+        expectEqual(r(late, elapsed: 30, ts: 40, now: 50), late, "iPad 酷狗换歌名: 时长变了但进度不在开头的不算")
+        R.resetForTesting()
+        defer { R.resetForTesting() }
+        _ = R.repaired(old, elapsed: 267, timestamp: at(17.6), bundleID: mac, now: at(18))
+        expectEqual(R.repaired(next, elapsed: 0.151, timestamp: at(22.8), bundleID: mac, now: at(30)), next,
+                    "iPad 酷狗换歌名: Mac 版不动")
+    }
+
+    // ---- 换歌名:在名单里挑 ----
+    do {
+        typealias R = KugouIPadTitleRepair
+        let a = R.Song(title: "AYOU (重新出发吗)", artist: "叶子舒", album: "AYOU(重新出发吗)", seconds: 204)
+        let b = R.Song(title: "雨过后的风景", artist: "Dizzy Dizzo (蔡诗芸)", album: "", seconds: 204)
+        let prev = R.Song(title: "安和桥", artist: "宋冬野", album: "安和桥北", seconds: 251)
+        let anchor = at(100)
+        func pick(_ q: R.Queue) -> String? { R.pick(q, duration: 204.813995, previousTitle: "安和桥", at: anchor)?.title }
+        expectEqual(pick(R.Queue(songs: [prev, a])), a.title, "iPad 酷狗挑歌: 只有一首时长对得上就是它")
+        expectEqual(pick(R.Queue(songs: [b, a, prev])), nil, "iPad 酷狗挑歌: 两首对得上、没有别的线索认不出")
+        expectEqual(pick(R.Queue(songs: [b, prev, a])), a.title, "iPad 酷狗挑歌: 几首对得上时取排在上一首后面的")
+        expectEqual(pick(R.Queue(songs: [a, prev, b], shuffleCurrent: 0, shuffleAt: 99.5 + 1_795_401_800)), a.title,
+                    "iPad 酷狗挑歌: 随机抽取记录这次换歌时改写过、指的那首对得上就是它")
+        expectEqual(pick(R.Queue(songs: [a, prev, b], shuffleCurrent: 0, shuffleAt: 90 + 1_795_401_800)), b.title,
+                    "iPad 酷狗挑歌: 抽取记录是早先写的不算,退回排在上一首后面的")
+        expectEqual(pick(R.Queue(songs: [prev, R.Song(title: "安和桥", artist: "宋冬野", album: "x", seconds: 204)])), nil,
+                    "iPad 酷狗挑歌: 跟上一首同名的不算")
+        expectEqual(R.pick(R.Queue(songs: [a]), duration: 206, previousTitle: "x", at: anchor), nil, "iPad 酷狗挑歌: 差一秒以上不算")
+    }
+
+    // ---- 换歌名:单问那一份、名单文件 ----
+    do {
+        typealias R = KugouIPadTitleRepair
+        R.resetForTesting()
+        defer { R.resetForTesting() }
+        func helper(_ title: String, duration: Double, elapsed: Double, ts: Double) -> Data {
+            Data(("{\"bundleIdentifier\":\"\(K.bundleID)\",\"title\":\"\(title)\",\"artist\":\"孙燕姿\",\"album\":\"我要的幸福\","
+                + "\"duration\":\(duration),\"playbackRate\":1,\"playing\":true,\"anchorElapsedTime\":\(elapsed),"
+                + "\"elapsedTime\":\(elapsed),\"timestamp\":\(ts)}").utf8)
+        }
+        let first = helper("开始懂了", duration: 271.493, elapsed: 267, ts: 1_795_409_217.6)
+        expectEqual(R.repairedPayload(first, now: Date(timeIntervalSince1970: 1_795_409_218)), first, "iPad 酷狗单问换歌名: 平常的原样")
+        let stuck = helper("开始懂了", duration: 239.095, elapsed: 0.151, ts: 1_795_409_222.8)
+        let out = R.repairedPayload(stuck, now: Date(timeIntervalSince1970: 1_795_409_226))
+        let object = (try? JSONSerialization.jsonObject(with: out)) as? [String: Any]
+        let hasQueue = FileManager.default.fileExists(atPath: R.stateURL.path)
+        if !hasQueue {
+            expectEqual([object?["title"] == nil, object?["artist"] == nil, object?["album"] == nil], [true, true, true],
+                        "iPad 酷狗单问换歌名: 认不出时去掉歌名、歌手、专辑")
+            expectEqual(NowPlayingClientsProbe.decodeSnapshot(stuck) == nil, true, "iPad 酷狗单问换歌名: 解出来当没有")
+        }
+        expectEqual(R.stateURL.lastPathComponent, "lyrimuse-kugou-ipad-queue.json", "iPad 酷狗换歌名: 名单文件跟引擎写的同名")
+    }
+
     // ---- 接线契约 ----
     do {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -217,7 +331,14 @@ func runKugouIPadTests() {
                      sourceHas(client, "elapsedNow: !kugouRewrote && plexamp.elapsed == names.elapsed")],
                     [true, true, true, true], "iPad 酷狗接线: 轮询解码补上恢复、外推值作废")
         let probe = sourceText("LyrimuseCore/Local/NowPlayingClientsProbe.swift")
-        expectEqual(sourceHas(probe, "let data = KugouIPadNowPlaying.normalizedPayload("), true, "iPad 酷狗接线: 单问那一份整理")
+        expectEqual(sourceHas(probe, "let data = KugouIPadTitleRepair.repairedPayload(KugouIPadNowPlaying.normalizedPayload("), true, "iPad 酷狗接线: 单问那一份整理")
+        expectEqual([sourceHas(client, "let kugouNames = KugouIPadTitleRepair.repaired("), sourceHas(client, "title = kugouNames.title"),
+                     sourceHas(client, "artist = kugouNames.artist"), sourceHas(client, "album = kugouNames.album")],
+                    [true, true, true, true], "iPad 酷狗接线: 轮询解码认出没报的新歌名")
+        expectEqual([sourceHas(sourceText("lyrimuse/Settings/FullDiskAccessPermission.swift"),
+                               "PlayerBundleAliases.isInstalledForContainerReads(player)"),
+                     PlayerBundleAliases.containerReadClients.contains(K.bundleID)],
+                    [true, true], "iPad 酷狗接线: 完全磁盘访问那一行算它(引擎读它的容器)")
         let watcher = sourceText("LyrimuseCore/Local/MediaControlStreamWatcher.swift")
         expectEqual([sourceHas(watcher, "let identity = KugouIPadNowPlaying.normalizedFields("),
                      sourceHas(watcher, "let timestamp = identity[\"timestamp\"] as? String")],

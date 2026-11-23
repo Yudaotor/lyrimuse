@@ -24,7 +24,8 @@ func localCacheClientPaths() map[string][]string {
 	netease, qq, soda := neteaseDataRoots(), qqDataRoots(), sodaDataRoots()
 	return map[string][]string{
 		"kugou": {kugouLocalLyricDir(), kugouUpcomingPath(), kugouQueuePlistPath(),
-			kugouConfigPlistPath(), kugouLibraryDBPath(), kugouNowPlayingPath()},
+			kugouConfigPlistPath(), kugouLibraryDBPath(), kugouNowPlayingPath(),
+			kugouIPadLocalLyricDir(), kugouIPadQueuePath(), kugouIPadCurrentListPath(), kugouIPadDynamicArtworkDir()},
 		"qq": {qq.containerPath(qqLibraryRel), qq.containerPath(qqQueueRel), qq.containerPath(qqRRCacheRel)},
 		"netease": {netease.containerPath(neteaseLibraryRel), netease.containerPath(neteaseQueueRel),
 			netease.containerPath(neteaseFMRel)},

@@ -12,7 +12,8 @@ import (
 // albumImgUrl、classname)放在 FullSongInfo,次序在 CurrentSongListNew(songid → FullSongInfo.id,songIndex 是次序;
 // CurrentSongListNew 自己的 songInfo 一直是空的)。App 把它按 Mac 版认,引擎拿到的都是 Mac 版的 bundle id,所以读 Mac 版
 // 数据的几处在认不出当前这首时再看这一份;按歌名、署名、时长认,两个版本的队列不会串。读它的成败不记进 "kugou" 的访问状态
-// (那一份管 Mac 版的完全磁盘访问)。见 02 章决策 292。
+// (每次读时记的那几笔只认 Mac 版的路径);它的容器跟 Mac 版是同一道完全磁盘访问,启动探测把两个容器都算进 "kugou"
+// (localcacheprobe.go),只装了 iPad 版的人设置页那一行照样提示。见 02 章决策 292、293。
 
 // kugouIPadQueueOverride 让单测把队列库指到临时路径。空 = 用真实路径。
 var kugouIPadQueueOverride string

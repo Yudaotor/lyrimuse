@@ -6,7 +6,8 @@ import AppKit
 /// `applicationURL(forBundleID:)`、`isInstalled(_:)`)。见 02 章决策 165。
 ///
 /// `otherClients` 是另一个程序的那几个(iPad 版网易云、iPad 版 QQ 音乐、iPad 版酷狗):报给系统的会话按本体认,菜单、界面、本机
-/// 数据却跟本体不一样,按本体的程序界面或数据去找它的地方(进程号、辅助功能 / 完全磁盘访问那两行)不算它。见 02 章决策 198、204、292。
+/// 数据却跟本体不一样,按本体的程序界面或数据去找它的地方(进程号、辅助功能 / 完全磁盘访问那两行)不算它;引擎也读它容器的
+/// `containerReadClients` 在完全磁盘访问那一行算它。见 02 章决策 198、204、292。
 public enum PlayerBundleAliases {
     public static let aliases: [String: PlaybackPlayer] = [
         "com.digipine.pineplayer.pro": .pinePlayer,
@@ -25,6 +26,10 @@ public enum PlayerBundleAliases {
     public static func canonical(_ bundleID: String) -> String {
         aliases[bundleID]?.bundleIdentifier ?? bundleID
     }
+
+    /// `otherClients` 里引擎照样读它容器的那几个(iPad 版酷狗:歌词缓存、播放队列、动态封面,跟 Mac 版同一道完全磁盘访问)。
+    /// 见 02 章决策 293。
+    public static let containerReadClients: Set<String> = [KugouIPadNowPlaying.bundleID]
 
     /// 这个 bundle id(本体或别名)所属播放器的全部 bundle id,本体在前、别名按字母序;`includingOtherClients` 为 false 时
     /// 不算 `otherClients`。纯函数,selftest 覆盖。
@@ -78,5 +83,17 @@ public enum PlayerBundleAliases {
         !player.bundleIdentifier.isEmpty
             && all(for: player.bundleIdentifier, includingOtherClients: includingOtherClients)
                 .contains { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil }
+    }
+
+    /// 完全磁盘访问那一行判装没装:本体、别的版本,加上引擎也读它容器的 `containerReadClients`(只装了 iPad 版酷狗的也要授权)。
+    public static func isInstalledForContainerReads(_ player: PlaybackPlayer) -> Bool {
+        isInstalledForContainerReads(player) { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil }
+    }
+
+    /// 同上,装没装由调用方答。纯函数,selftest 覆盖。
+    public static func isInstalledForContainerReads(_ player: PlaybackPlayer, installed: (String) -> Bool) -> Bool {
+        guard !player.bundleIdentifier.isEmpty else { return false }
+        return all(for: player.bundleIdentifier, includingOtherClients: false).contains(where: installed)
+            || containerReadClients.contains { aliases[$0] == player && installed($0) }
     }
 }

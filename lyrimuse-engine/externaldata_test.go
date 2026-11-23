@@ -88,6 +88,8 @@ func TestMain(m *testing.M) {
 	neteaseIPadKVOverride = filepath.Join(missing, "music_storage_keyValue.sqlite3")
 	kugouUpcomingOverride = filepath.Join(missing, "currentPlayList.sqlite")
 	kugouIPadQueueOverride = filepath.Join(missing, "ipad", "currentPlayList.sqlite")
+	kugouIPadCurrentListOverride = filepath.Join(missing, "ipad", "userCurrentPlayList.plist")
+	kugouIPadDynamicArtworkOverride = filepath.Join(missing, "ipad", "KGDynamicArtwork")
 	kugouQueuePlistOverride = filepath.Join(missing, "userCurrentPlayList.plist")
 	kugouConfigPlistOverride = filepath.Join(missing, "KugouConfigPlist.plist")
 	kugouLibraryDBOverride = filepath.Join(missing, "kugou3.sqlite")

@@ -2107,6 +2107,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 	go startEnrichEditWatcher(ctx)                    // App 侧改歌词缓存的请求,见 enrichedit.go 顶部注释
 	go startNeteaseEpisodesWatcher(ctx)               // 网易云播放列表里的播客单集名单,App 据此不把单集当歌报,见 neteasepodcast.go
 	go startNeteaseIPadEpisodesWatcher(ctx)           // iPad 版网易云此刻放的一集,同上,见 neteaseipad.go
+	go startKugouIPadQueueWatcher(ctx)                // iPad 版酷狗的播放队列,App 认它没报的新歌名时用,见 kugouipadqueue.go
 	go startKasetAlbumSweep(ctx)                      // 用 Kaset 放过、还没按当前界面语言判过专辑的条目补判一次,见 kasetalbum.go
 	go startRecordingISRCSweep(ctx)                   // 存量条目按已存的 Apple 歌曲 id、Spotify 曲目 id、Amazon 曲目 ASIN 补一次 ISRC,见 recordingisrc.go
 	go startLyricsFillSweeper(ctx)                    // 存量空歌词的定时/手动补空扫描,见 lyricsfillsweep.go 顶部注释

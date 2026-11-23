@@ -55,7 +55,7 @@ final class FullDiskAccessPermission: ObservableObject {
     /// (iPad 版网易云)也不算,引擎读的是本体的数据。
     func visiblePlayers(for selection: Set<PlaybackPlayer>) -> [PlaybackPlayer] {
         selection.playersNeedingFullDiskAccess.filter { player in
-            PlayerBundleAliases.isInstalled(player, includingOtherClients: false)
+            PlayerBundleAliases.isInstalledForContainerReads(player)
                 && player.localCacheSource.map { LocalCacheAccess.needsGrant($0, state: state) } ?? true
         }
     }

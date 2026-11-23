@@ -73,7 +73,7 @@ var kugouIPadLocalDirOverride string
 
 // kugouIPadLocalLyricDir 是 iPad 版酷狗(iOS 应用跑在 Apple 芯片 Mac 上,bundle id com.kugou.kugou1002)的歌词缓存目录,
 // 跟 Mac 版同一种 KRC、同样按「歌手 - 歌名_hash.krc」或数字起名。App 把它按 Mac 版认,引擎拿到的都是 Mac 版的 bundle id,
-// 两个目录合进同一份索引。读它的成败不记进 "kugou" 的访问状态(那一份管 Mac 版)。见 02 章决策 292。
+// 两个目录合进同一份索引。读它的成败不记进 "kugou" 的访问状态(见 kugouipad.go 头注)。见 02 章决策 292。
 func kugouIPadLocalLyricDir() string {
 	if kugouIPadLocalDirOverride != "" {
 		return kugouIPadLocalDirOverride

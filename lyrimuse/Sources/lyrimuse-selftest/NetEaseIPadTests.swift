@@ -492,7 +492,7 @@ func runNetEaseIPadTests() {
                      sourceHas(sourceText("lyrimuse/Settings/AccessibilityPermission.swift"),
                                "PlayerBundleAliases.isInstalled(player, includingOtherClients: false)"),
                      sourceHas(sourceText("lyrimuse/Settings/FullDiskAccessPermission.swift"),
-                               "PlayerBundleAliases.isInstalled(player, includingOtherClients: false)")],
+                               "PlayerBundleAliases.isInstalledForContainerReads(player)")],
                     [true, true, true], "iPad 网易云 接线: 找进程、辅助功能和完全磁盘访问那两行不算它")
         expectEqual([sourceHas(client, "noteReportingClient(reportedBundleID, forBundleID: bundleID)"),
                      sourceHas(probe, "MediaControlClient.noteReportingClient(id, forBundleID: main)"),

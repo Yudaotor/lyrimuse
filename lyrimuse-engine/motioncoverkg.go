@@ -13,7 +13,8 @@ import (
 // 或者整幅是封面裁窄的一段、动画中途推近。引擎认出文件后拷进缓存目录(App 不读别的 App 的容器,会弹「想访问其他 App 的
 // 数据」),动态封面地址写成 `kgmv:<专辑 id>`;App 读拷过来的那份,中段帧、首帧的中间正方形有一帧对上当前封面才用
 // (MotionCoverIdentityVerified 为 false)。不联网,不进动态封面那张缓存表:酷狗放过之后文件才有,每次现看。
-// 见 03 章决策 69。
+// iPad 版酷狗(App 按 Mac 版认,专辑 id 记在 Mac 版名下)容器里有同名目录,Mac 版那份没有这个文件时再看它。
+// 见 03 章决策 69、02 章决策 293。
 
 // kugouMotionCoverScheme:动态封面地址里酷狗那一种的前缀,后面是酷狗专辑 id。App 侧按它认(KugouMotionCover)。
 const kugouMotionCoverScheme = "kgmv:"
@@ -37,6 +38,16 @@ func kugouDynamicArtworkDir() string {
 	return kugouContainerPath("Library/Application Support/com.kugou.mac.Music/KGDynamicArtwork")
 }
 
+// kugouIPadDynamicArtworkOverride 让单测把 iPad 版那个目录指到临时路径。空 = 用真实路径。
+var kugouIPadDynamicArtworkOverride string
+
+func kugouIPadDynamicArtworkDir() string {
+	if kugouIPadDynamicArtworkOverride != "" {
+		return kugouIPadDynamicArtworkOverride
+	}
+	return otherAppContainer(homeSubdir("Library/Containers/com.kugou.kugou1002/Data/Library/Application Support/com.kugou.kugou1002/KGDynamicArtwork"))
+}
+
 // kugouMotionStagedPath:拷过来的那份。拿不到缓存目录为 ""。
 func kugouMotionStagedPath(id string) string {
 	if cacheDir() == "" {
@@ -48,15 +59,19 @@ func kugouMotionStagedPath(id string) string {
 // kugouMotionCoverAlbum:这条记着的酷狗专辑 id,酷狗本机有它的动态封面视频时返回 id 和那个文件;没有、读不了为 ""。
 func kugouMotionCoverAlbum(e enrichEntry) (id, file string) {
 	id = e.PlayerAlbumIDs[kugouMusicBundleID]
-	dir := kugouDynamicArtworkDir()
-	if !playerSongIDOK(kugouMusicBundleID, id) || dir == "" {
+	if !playerSongIDOK(kugouMusicBundleID, id) {
 		return "", ""
 	}
-	file = filepath.Join(dir, id+".mp4")
-	if fi, err := os.Stat(file); err != nil || !fi.Mode().IsRegular() || fi.Size() == 0 || fi.Size() > kugouMotionVideoMaxBytes {
-		return "", ""
+	for _, dir := range []string{kugouDynamicArtworkDir(), kugouIPadDynamicArtworkDir()} {
+		if dir == "" {
+			continue
+		}
+		file = filepath.Join(dir, id+".mp4")
+		if fi, err := os.Stat(file); err == nil && fi.Mode().IsRegular() && fi.Size() > 0 && fi.Size() <= kugouMotionVideoMaxBytes {
+			return id, file
+		}
 	}
-	return id, file
+	return "", ""
 }
 
 // stageKugouMotionCover:把酷狗那份拷进缓存目录(已有一样大的就不拷),拷完按 kugouMotionStageMax 删旧的。成了为 true。
