@@ -13,6 +13,22 @@ public enum NotchVisibility {
         isVisible && !coveredByFullScreen && (!hideWhenNotPlaying || isPlaying || alertHold)
     }
 
+    /// 换 Space 后窗口要不要重新声明归属(issue #107:macOS 27 上 `.screenSaver` 层的 NSPanel 会把
+    /// `orderFront` 时所在的 Space 记死,切到别的桌面整块不见,而这只窗口的 `isOnActiveSpace` 仍是 false)。
+    ///
+    /// 只有「灵动岛开着、按显隐逻辑此刻该在屏上、窗口却不在当前 Space」三条同时成立才需要 re-assert
+    /// (`orderFrontRegardless` / 重设 `collectionBehavior`);其余三类都不动:
+    /// - 未显示(`isVisible` false):窗口本来就不该在屏上,切 Space 不能把它叫回来;
+    /// - 按显隐逻辑应隐藏(`shouldShow` false:暂停时隐藏 / 全屏隐藏等):等常规显示路径,不在换 Space 时抢着露;
+    /// - 已经在当前 Space:不重复发一次 WindowServer 事务。
+    ///
+    /// `shouldShow` 传 `shouldShow(...)` 那一份的结论;`isOnActiveSpace` 传 `NSWindow.isOnActiveSpace`。
+    /// `isVisible` 跟 `shouldShow(...)` 的入参同源(灵动岛开关),不是 `NSWindow.isVisible`;窗口实际
+    /// 上没上屏由调用方另行把关(只在窗口确实在屏上时才需要把它从别的 Space 叫回来)。
+    public static func needsSpaceReassert(isVisible: Bool, shouldShow: Bool, isOnActiveSpace: Bool) -> Bool {
+        isVisible && shouldShow && !isOnActiveSpace
+    }
+
     /// 稳态那一行歌词画不画(卡片读的生效值):「显示歌词」开着,且没被「纯音乐/无歌词时收起歌词行」收掉
     /// (`collapsedForNoLyrics` = `NoLyricsAutoHide.hides`)。收掉后跟关了「显示歌词」一样只留顶行,hover 展开照常。
     public static func showsLyrics(setting: Bool, collapsedForNoLyrics: Bool) -> Bool {

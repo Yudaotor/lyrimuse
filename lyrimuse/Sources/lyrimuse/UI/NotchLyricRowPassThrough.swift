@@ -56,6 +56,12 @@ final class NotchLyricRowPassThrough {
     /// 穿透过一次之后按指针位置显式管点击(见头注)。
     private(set) var managesHitTesting = false
 
+    /// Keep the existing pointer monitors and fade mask while the AppKit panel is
+    /// replaced to escape a stale Space assignment.
+    func replaceWindow(_ window: NSWindow) {
+        self.window = window
+    }
+
     /// 设了就拿它代替真指针(屏幕坐标,`debug/notch-pass-through`),只管这一次穿透。
     var debugPointer: NSPoint?
     /// 设了就一直拿它代替真指针(屏幕坐标,`debug/notch-pointer`),直到 `debug/notch-pass-through?off=1` 清掉。

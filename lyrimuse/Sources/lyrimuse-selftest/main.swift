@@ -81,7 +81,7 @@ let groups: [TestGroup] = [
     TestGroup(name: "touch-bar", summary: "触控栏歌词:显示哪一档 / 私有入口收口 / 接线", run: runTouchBarTests),
     TestGroup(name: "overlay", summary: "桌面悬浮歌词 / 歌词窗口的几何与命中测试", run: runOverlayTests),
     TestGroup(name: "lyrics-window", summary: "歌词窗口:空状态优先级 / 字号 / 景深 / 迷你两行 / 窗口位置 / 文字色调 / vibrancy / Last.fm 喜欢 / 进度外推", run: runLyricsWindowTests),
-    TestGroup(name: "notch", summary: "灵动岛:展开区 / 音浪包络", run: runNotchTests),
+    TestGroup(name: "notch", summary: "灵动岛:展开区 / 音浪包络 / 换 Space 后的恢复判定", run: runNotchTests),
     TestGroup(name: "notch-ear-width", summary: "灵动岛左右耳各自的宽度:两耳等宽跟原公式一致 / 偏心几何 / 命中与进度线 / 无刘海屏 / 深链 / 接线", run: runNotchEarWidthTests),
     TestGroup(name: "real-audio", summary: "灵动岛音浪跟随音乐:频段 / 自适应归一化与快升慢落 / 输出延迟 / 退回判定 / 跟哪些进程 / 默认关与接线", run: runRealAudioTests),
     TestGroup(name: "idle-page", summary: "停播页:第 N 次听换算 / 收听总览 / 选句 / 平台链接", run: runIdlePageTests),

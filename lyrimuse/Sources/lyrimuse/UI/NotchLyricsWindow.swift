@@ -7,6 +7,14 @@ import AppKit
 // 的位置是算出来的、贴死在屏幕顶部居中,不像经典悬浮窗那样允许用户拖拽换位置,
 // "锁定位置"这个概念对这个新样式不适用(没有可拖拽的位置需要锁,也没有位置持久化)。
 final class NotchLyricsWindow: NSPanel {
+    /// The collection behavior used by the notch panel while it is shown. macOS 27 can
+    /// leave a `.screenSaver` panel attached to the Space in which it was last ordered
+    /// front, even when `.canJoinAllSpaces` is set. Reapplying this exact set is the
+    /// public API recovery path used after an active Space change.
+    static let spaceCollectionBehavior: NSWindow.CollectionBehavior = [
+        .canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle
+    ]
+
     init(contentRect: NSRect) {
         super.init(
             contentRect: contentRect,
@@ -41,7 +49,7 @@ final class NotchLyricsWindow: NSPanel {
         // 跟 LyricsOverlayWindow 同一套 flag,含义见那个文件的注释:.fullScreenAuxiliary
         // 让它能显示在"某个 App 已全屏"那个 Space 上面,.canJoinAllSpaces 跟着切 Space
         // 走不用每次重新显示。
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        collectionBehavior = Self.spaceCollectionBehavior
         isMovableByWindowBackground = false
         // isMovable = false 是为了避开 macOS(Sequoia 起)窗口平铺(Window Tiling)
         // 拖拽时的"可平铺目标"高亮提示:拖动任意窗口经过屏幕顶部时,系统会判断这个
