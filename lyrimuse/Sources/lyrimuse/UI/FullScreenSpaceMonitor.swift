@@ -13,10 +13,14 @@ final class FullScreenSpaceMonitor: ObservableObject {
 
     /// 当前 Space 为全屏的屏幕标识(大写 UUID 串,或 `FullScreenSpaces.sharedSpacesIdentifier`)。
     @Published private(set) var fullScreenDisplays: Set<String> = []
+    /// Space 切换后私有全屏表还没稳定时为 true;窗口恢复要等它落定,避免把高层 panel 带进全屏 Space。
+    @Published private(set) var isSpaceTransitionPending = false
 
     private static let settleDelay: TimeInterval = 0.6
+    private static let retryDelays: [TimeInterval] = [0.05, 0.15, 0.3, settleDelay]
     private var observers: [NSObjectProtocol] = []
-    private var settleWork: DispatchWorkItem?
+    private var settleWorkItems: [DispatchWorkItem] = []
+    private var settleGeneration = 0
 
     private init() {
         refresh()
@@ -41,13 +45,35 @@ final class FullScreenSpaceMonitor: ObservableObject {
     }
 
     private func refreshNowAndAfterSettle() {
+        settleGeneration &+= 1
+        let generation = settleGeneration
+        settleWorkItems.forEach { $0.cancel() }
+        settleWorkItems.removeAll(keepingCapacity: true)
+        isSpaceTransitionPending = true
+
+        let previous = fullScreenDisplays
         refresh()
-        settleWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            MainActor.assumeIsolated { self?.refresh() }
+        guard fullScreenDisplays == previous else {
+            isSpaceTransitionPending = false
+            return
         }
-        settleWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.settleDelay, execute: work)
+
+        for (index, delay) in Self.retryDelays.enumerated() {
+            let isFinalProbe = index == Self.retryDelays.count - 1
+            let work = DispatchWorkItem { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self, self.settleGeneration == generation else { return }
+                    let previous = self.fullScreenDisplays
+                    self.refresh()
+                    guard self.fullScreenDisplays != previous || isFinalProbe else { return }
+                    self.settleWorkItems.forEach { $0.cancel() }
+                    self.settleWorkItems.removeAll()
+                    self.isSpaceTransitionPending = false
+                }
+            }
+            settleWorkItems.append(work)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+        }
     }
 
     private func refresh() {

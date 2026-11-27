@@ -2907,6 +2907,15 @@ func runNotchTests() {
                     "无歌词隐藏契约: 悬浮歌词订阅自己那一份开关,并进显隐判据")
         expectEqual(sourceHas(controller, "AppSettings.shared.$notchHideInFullScreen\n            .combineLatest(FullScreenSpaceMonitor.shared.$fullScreenDisplays)"), true,
                     "全屏契约: 每个实例(含镜像副本)自己订阅开关与全屏表,值从 sink 参数拿")
+        let fullScreenMonitor = read("FullScreenSpaceMonitor.swift")
+        expectEqual(fullScreenMonitor.contains("@Published private(set) var isSpaceTransitionPending = false")
+                    && fullScreenMonitor.contains("private static let retryDelays: [TimeInterval] = [0.05, 0.15, 0.3, settleDelay]")
+                    && fullScreenMonitor.contains("self.isSpaceTransitionPending = false"), true,
+                    "全屏时序契约: Space 表快速重查,稳定前标记 pending")
+        expectEqual(controller.contains("FullScreenSpaceMonitor.shared.$isSpaceTransitionPending")
+                    && controller.contains("recoverWhenSpaceTransitionSettles()")
+                    && controller.contains("guard !FullScreenSpaceMonitor.shared.isSpaceTransitionPending else { return }"), true,
+                    "Space 恢复契约: 全屏检测稳定前不把高层 panel 重建进目标 Space")
         expectEqual(sourceHas(controller, "let screen = resolvedScreen()\n        let covered = FullScreenSpaces.covers("), true,
                     "全屏契约: 按这扇窗自己所在的屏判,不看别的屏")
         expectEqual(controller.contains("let hide = !presentsOnLockScreen && NotchVisibility.fullScreenHides(enabled: enabled, coveredByFullScreenApp: covered)"), true,
