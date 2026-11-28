@@ -24,6 +24,8 @@ final class NotchLyricsWindow: NSPanel {
         )
         isOpaque = false
         backgroundColor = .clear
+        // 先放行桌面点击,控制器上屏后才按指针位置开启卡片的交互。
+        ignoresMouseEvents = true
         // hasShadow=true 会导致顶边有一小条不是纯黑:AppKit 给无边框透明窗口自动算
         // 阴影时,会在窗口内容的最外沿采样出一圈很淡的灰色(跟具体卡片颜色无关,固定
         // 在纯黑背景上尤其扎眼,磨砂玻璃因为本身半透明才不明显),这条窗口贴死在屏幕

@@ -6,13 +6,9 @@ import QuartzCore
 /// 指针压上来时整扇窗切成 `ignoresMouseEvents`,点击、滚动落到下层窗口,这一截整条淡下去露出底下的内容;指针离开这一截就恢复接收。
 /// 见 05 章决策 121、124。
 ///
-/// 穿透期间这扇窗收不到任何指针事件,SwiftUI 的悬停也就不来了:指针去哪由全局 / 本地监听器跟踪,再加一个低频兜底,
-/// 监听器漏了事件也能及时退出。
-///
-/// `ignoresMouseEvents` 设过 true 之后再设回 false,AppKit 让整扇窗连透明处都接点击(没设过时透明像素的点击落到下层),
-/// 没有公开接口回到没设过的样子,换前台、重新上屏也不行。所以第一次穿透结束后不再把整扇窗设回接点击,改成按指针位置
-/// 显式管(`managesHitTesting`):在卡片上收点击、卡片外放过去,监听器从那以后窗口露着就装着(同经典悬浮窗),收起时卸;没穿透过的窗不装。
-/// 见 05 章决策 126。
+/// 窗口从上屏起就跟踪指针:卡片接点击的区域才收鼠标,卡片外和只显示歌词的区域放过去。
+/// `ignoresMouseEvents` 切回 false 时 AppKit 可能让透明区也接点击,因此不能把整扇窗交还给默认命中测试。
+/// 窗口露着才装全局 / 本地监听和低频兜底,收起时一起卸。见 05 章决策 126。
 ///
 /// 淡化挂在 hosting view 的 layer 上(`CALayer.mask`),只在穿透期间存在。别改成 SwiftUI 里常驻的 `.mask`:灵动岛的逐字填色
 /// 一直在动,常驻遮罩让整卡每帧多一次离屏合成;按条件挂又会换掉卡片的视图身份、重置里面的状态。
@@ -29,8 +25,8 @@ final class NotchLyricRowPassThrough {
     private weak var hostView: NSView?
     /// 给一个屏幕坐标,按此刻的卡片矩形和形态判它落在哪一块。
     private let locate: (NSPoint) -> Hit?
-    /// 指针离开只显示那一截时调,参数是它现在所在的那一块。
-    private let onExit: (NotchHoverHit.Region) -> Void
+    /// 窗口开始接收鼠标时主动报告进入,停在卡片里的指针可能没有下一条移动事件。
+    private let onCardEnter: () -> Void
 
     private var monitors: [Any] = []
     private var fallbackTimer: Timer?
@@ -44,16 +40,16 @@ final class NotchLyricRowPassThrough {
     private static let fallbackInterval: TimeInterval = 0.25
 
     init(window: NSWindow?, hostView: NSView?, locate: @escaping (NSPoint) -> Hit?,
-         onExit: @escaping (NotchHoverHit.Region) -> Void) {
+         onCardEnter: @escaping () -> Void) {
         self.window = window
         self.hostView = hostView
         self.locate = locate
-        self.onExit = onExit
+        self.onCardEnter = onCardEnter
     }
 
     /// 正在穿透。
     private(set) var isActive = false
-    /// 穿透过一次之后按指针位置显式管点击(见头注)。
+    /// 此刻是否跟踪指针并管理点击穿透。
     private(set) var managesHitTesting = false
 
     /// Keep the existing pointer monitors and fade mask while the AppKit panel is
@@ -70,15 +66,9 @@ final class NotchLyricRowPassThrough {
     private var pointer: NSPoint { debugPointer ?? stickyPointer ?? NSEvent.mouseLocation }
 
     func begin() {
-        guard !isActive, let window else { return }
+        guard managesHitTesting, !isActive, let window else { return }
         isActive = true
         window.ignoresMouseEvents = true
-        installMonitors()
-        let timer = Timer(timeInterval: Self.fallbackInterval, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.track() }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        fallbackTimer = timer
         NotchLyricsWindowController.hoverLog.notice("pass-through begin")
         track()
     }
@@ -86,7 +76,11 @@ final class NotchLyricRowPassThrough {
     /// 卡片尺寸或形态变了(展开、广告开始、换行高)时复查一次:指针没动也可能已经不在只显示那一截上了,
     /// 显式管点击时卡片的范围也跟着变。
     func refresh() {
-        if managesHitTesting, window?.isVisible == true { installMonitors() }
+        guard window?.isVisible == true else { return }
+        if !managesHitTesting {
+            managesHitTesting = true
+            installMonitors()
+        }
         track()
     }
 
@@ -95,33 +89,24 @@ final class NotchLyricRowPassThrough {
         isActive = false
         // 模拟的那一点只管这一次穿透:留着的话下次真指针进来还按它判,退不出去。
         debugPointer = nil
-        fallbackTimer?.invalidate()
-        fallbackTimer = nil
-        // 别设回 false:那样整扇窗连透明处都接点击(见头注)。从这里起按指针位置管。
-        managesHitTesting = true
         syncHitTesting()
         unfade()
         NotchLyricsWindowController.hoverLog.notice("pass-through end")
     }
 
-    /// 窗口收起(隐藏)时调:退出穿透、卸监听,不然指针在哪动都唤醒 App。显式管点击照旧(回不去,见头注),
-    /// 重新露面时 `refresh()` 把监听装回来。
+    /// 窗口收起时暂停指针跟踪,并为下次上屏保留穿透状态。
     func suspend() {
-        end()
-        monitors.forEach(NSEvent.removeMonitor)
-        monitors.removeAll()
-    }
-
-    /// 窗口收掉时调:退出穿透、卸监听。
-    func stop() {
-        end()
-        monitors.forEach(NSEvent.removeMonitor)
-        monitors.removeAll()
         managesHitTesting = false
+        if window?.ignoresMouseEvents == false { window?.ignoresMouseEvents = true }
+        end()
+        monitors.forEach(NSEvent.removeMonitor)
+        monitors.removeAll()
+        fallbackTimer?.invalidate()
+        fallbackTimer = nil
     }
 
     private func installMonitors() {
-        guard monitors.isEmpty else { return }
+        guard monitors.isEmpty, fallbackTimer == nil else { return }
         let mask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged]
         if let global = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: { [weak self] _ in
             MainActor.assumeIsolated { self?.track() }
@@ -134,6 +119,11 @@ final class NotchLyricRowPassThrough {
         }) {
             monitors.append(local)
         }
+        let timer = Timer(timeInterval: Self.fallbackInterval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.track() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        fallbackTimer = timer
     }
 
     /// 不在穿透时:指针在卡片接指针的那块上收点击,在卡片外(透明区)放过去;落到只显示那一截就转去穿透
@@ -149,22 +139,20 @@ final class NotchLyricRowPassThrough {
             return
         }
         let ignores = hit.region == .outside
-        if window.ignoresMouseEvents != ignores { window.ignoresMouseEvents = ignores }
+        guard window.ignoresMouseEvents != ignores else { return }
+        window.ignoresMouseEvents = ignores
+        if !ignores { onCardEnter() }
     }
 
     private func track() {
+        guard managesHitTesting else { return }
         guard isActive else {
             syncHitTesting()
             return
         }
-        guard window?.isVisible ?? false, let hit = locate(pointer) else {
+        guard window?.isVisible == true, let hit = locate(pointer),
+              hit.region == .passThrough, let bandTop = hit.bandTop else {
             end()
-            onExit(.outside)
-            return
-        }
-        guard hit.region == .passThrough, let bandTop = hit.bandTop else {
-            end()
-            onExit(hit.region)
             return
         }
         fade(bandTop: bandTop, cardSize: hit.cardSize)

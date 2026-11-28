@@ -2870,6 +2870,7 @@ func runNotchTests() {
                     && replacementBody.contains("replacement.setFrame(frame, display: false)")
                     && replacementBody.contains("replacement.orderFrontRegardless()")
                     && replacementBody.contains("passThrough?.replaceWindow(replacement)")
+                    && !replacementBody.contains("replacement.ignoresMouseEvents")
                     && !replacementBody.contains("isVanished =")
                     && !replacementBody.contains("surfaceFeed.set(false)"), true,
                     "Space 恢复契约: 新 panel 接管原 hosting view 与穿透状态,不重建播放/歌词树")
@@ -3568,18 +3569,17 @@ func runNotchTests() {
                     "歌词行穿透: 关掉开关时立刻退出穿透")
         expectEqual(app("Settings/AppSettings.swift").contains("static let defaultNotchFadeLyricRowOnHover = false"), true,
                     "歌词行穿透: 「悬浮淡化」默认关")
-        expectEqual(sourceHas(sourceBody("func begin()", in: pass), "window.ignoresMouseEvents = true")
-                        && sourceHas(sourceBody("func begin()", in: pass), "installMonitors()"), true,
-                    "歌词行穿透: 进来时整扇窗穿透、装监听")
-        // ignoresMouseEvents 设过 true 再设回 false,整扇窗连透明处都接点击:穿透结束后按指针位置显式管,别设回 false(05 章决策 126)。
+        expectEqual(sourceHas(sourceBody("func begin()", in: pass), "window.ignoresMouseEvents = true"), true,
+                    "歌词行穿透: 进来时整扇窗穿透")
         expectEqual([pass.contains("ignoresMouseEvents = false"),
-                     sourceHas(sourceBody("func end()", in: pass), "managesHitTesting = true\n syncHitTesting()"),
+                     sourceHas(sourceBody("func end()", in: pass), "syncHitTesting()"),
                      sourceHas(sourceBody("private func syncHitTesting()", in: pass), "let ignores = hit.region == .outside"),
                      sourceHas(sourceBody("private func syncHitTesting()", in: pass), "if hit.region == .passThrough, hit.bandTop != nil {\n begin()"),
-                     sourceHas(sourceBody("func stop()", in: pass), "monitors.forEach(NSEvent.removeMonitor)"),
-                     sourceHas(ctrl, "passThrough?.stop()\n passThrough = nil")],
-                    [false, true, true, true, true, true],
-                    "歌词行穿透: 离开后不把整扇窗设回接点击,改按指针位置收放(卡片上收、透明区放、只显示那一截转去穿透);窗口收掉才卸监听")
+                     sourceHas(ctrl, "passThrough?.suspend()\n passThrough = nil"),
+                     sourceHas(ctrl, "if !presentsOnLockScreen {\n passThrough = NotchLyricRowPassThrough("),
+                     window.contains("ignoresMouseEvents = true")],
+                    [false, true, true, true, true, true, true],
+                    "歌词行穿透: 窗口起初放行点击,上屏后按卡片位置收放;锁屏窗口不接指针")
         expectEqual(sourceHas(sourceBody("func end()", in: pass), "debugPointer = nil"), true,
                     "歌词行穿透: 穿透结束时清掉模拟的指针,下次真指针进来不再按它判")
         expectEqual(sourceHas(sourceBody("private func animateBand(", in: pass), "CATransaction.setDisableActions(true)"), true,
@@ -3588,9 +3588,11 @@ func runNotchTests() {
                         && !root.contains(".mask"), true,
                     "歌词行穿透: 淡化只在穿透期间挂在 layer 上,SwiftUI 里不常驻遮罩")
         expectEqual(sourceHas(sourceBody("private func resetHoverAfterHide()", in: ctrl), "passThrough?.suspend()")
-                        && sourceHas(sourceBody("func suspend()", in: pass), "end()\nmonitors.forEach(NSEvent.removeMonitor)\nmonitors.removeAll()")
-                        && sourceHas(sourceBody("func refresh()", in: pass), "if managesHitTesting, window?.isVisible == true { installMonitors() }"), true,
-                    "歌词行穿透: 窗口收起时退出穿透、卸掉全局指针监听,重新露面再装回来")
+                        && sourceHas(sourceBody("func suspend()", in: pass), "monitors.forEach(NSEvent.removeMonitor)\nmonitors.removeAll()\nfallbackTimer?.invalidate()")
+                        && sourceHas(sourceBody("private func installMonitors()", in: pass), "guard monitors.isEmpty, fallbackTimer == nil else { return }")
+                        && sourceHas(sourceBody("func refresh()", in: pass), "guard window?.isVisible == true else { return }\nif !managesHitTesting {\nmanagesHitTesting = true\ninstallMonitors()")
+                        && sourceHas(sourceBody("private func applySurfaceVisible(", in: ctrl), "if visible {\nrefreshLyricPassThrough()"), true,
+                    "歌词行穿透: 第一次上屏就装监听,隐藏时停掉监听和兜底计时器,重新露面再装回来")
         expectEqual(ctrl.contains("LyrimuseActionRunner.perform(.nextTrackHotkey)")
                     && ctrl.contains("VolumeMonitor.adjustSystemVolume(by: delta)"), true,
                     "灵动岛五项: 切歌走快捷键那一条(先查自动化权限),音量调的是系统音量")
@@ -3890,7 +3892,8 @@ func runNotchTests() {
         let playingAt = initBody.range(of: "PlaybackCoordinator.shared.$isPlayingSmoothed.sink")?.lowerBound
         expectEqual(hiddenAt != nil && playingAt != nil && hiddenAt! < playingAt!
                         && initBody.contains("if presentsOnLockScreen {")
-                        && sourceHas(initBody, "isVisible = false\n panel.ignoresMouseEvents = true\n }"), true,
+                        && sourceHas(initBody, "if !presentsOnLockScreen {\n passThrough = NotchLyricRowPassThrough(")
+                        && src("NotchLyricsWindow.swift").contains("ignoresMouseEvents = true"), true,
                     "锁屏显示: 锁屏那份先藏着(挪进锁屏那层之前不露面)、不接鼠标")
         expectEqual(sourceHas(presenter, "let instance = NotchLyricsWindowController(pinnedScreenID: screenID, presentsOnLockScreen: true)\n guard let window = instance.window, LockScreenSpace.adopt(window) else {")
                         && presenter.components(separatedBy: ".teardown()").count - 1 == 1

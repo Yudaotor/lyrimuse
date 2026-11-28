@@ -447,7 +447,6 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         if presentsOnLockScreen {
             // 先藏着:下面的播放订阅一挂上就会按 isVisible 摆出来,窗口要等挪进锁屏那层之后才露面。
             isVisible = false
-            panel.ignoresMouseEvents = true
         }
 
         // 先算好几何(刘海尺寸、两档卡宽、窗口 frame)再建 hostingView:反过来 SwiftUI 先按声明默认值和占位窗口排一版,
@@ -462,10 +461,15 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         hosting.sizingOptions = []
         panel.contentView = hosting
         hostingView = hosting
-        passThrough = NotchLyricRowPassThrough(
-            window: panel, hostView: hosting,
-            locate: { [weak self] point in self?.passThroughHit(at: point) },
-            onExit: { [weak self] region in if region == .card { self?.setExpandedFromWindow(true) } })
+        if !presentsOnLockScreen {
+            passThrough = NotchLyricRowPassThrough(
+                window: panel, hostView: hosting,
+                locate: { [weak self] point in self?.passThroughHit(at: point) },
+                onCardEnter: { [weak self] in
+                    guard let self, !self.isCardHovered else { return }
+                    self.setExpandedFromWindow(true)
+                })
+        }
         panel.onScrollWheel = { [weak self] event in self?.handleScrollWheel(event) }
 
         // 窗口还没 orderFront 时 occlusionState 也是「不可见」,所以初值保持 true;上屏后系统会补一次通知。
@@ -1001,7 +1005,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 panel.collectionBehavior = []
                 panel.collectionBehavior = NotchLyricsWindow.spaceCollectionBehavior
                 panel.orderFrontRegardless()
-                self.passThrough?.refresh()
+                self.refreshLyricPassThrough()
                 Self.spaceLog.notice("space recovery retried public Space behavior on replacement panel")
             }
         }
@@ -1025,7 +1029,6 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         let replacement = NotchLyricsWindow(contentRect: frame)
         replacement.setFrame(frame, display: false)
         replacement.sharingType = AppSettings.shared.notchHideDuringScreenCapture ? .none : .readWrite
-        replacement.ignoresMouseEvents = oldPanel.ignoresMouseEvents
         replacement.onScrollWheel = { [weak self] event in self?.handleScrollWheel(event) }
 
         NotchEditorialPanel.shared.close(ifOwner: oldPanel)
@@ -1044,7 +1047,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         passThrough?.replaceWindow(replacement)
         observeOcclusionState(of: replacement)
         replacement.orderFrontRegardless()
-        passThrough?.refresh()
+        refreshLyricPassThrough()
         return replacement
     }
 
@@ -1067,7 +1070,11 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 看不见了(锁屏、屏保、熄屏;灵动岛在屏保层,别的窗口挡不住它):控制器这份悬停也清掉,跟视图那份
         // (NotchWindowRoot 里 isSurfaceVisible 的 onChange)配对。只清视图那份的话,解锁时指针已经移开,
         // 之后的离开事件都不算边沿,卡片一直停在展开态。
-        if !visible { resetHoverAfterHide() }
+        if visible {
+            refreshLyricPassThrough()
+        } else {
+            resetHoverAfterHide()
+        }
     }
 
     /// 展开态头部快捷操作里那颗 ✕:关掉「灵动岛歌词」总开关。只是 `setVisible(false)`
@@ -1258,12 +1265,15 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 窗口这一侧报指针进了只显示的那一截。
     func beginLyricPassThrough() { passThrough?.begin() }
 
-    /// 卡片尺寸或形态变了,穿透中的话按指针此刻的位置复查。
-    func refreshLyricPassThrough() { passThrough?.refresh() }
+    /// 上屏或卡片形态改变时,按当前指针位置决定接收还是放行。
+    func refreshLyricPassThrough() {
+        guard isSurfaceVisible else { return }
+        passThrough?.refresh()
+    }
 
     /// 屏幕上这一点落在卡片哪一块。
     private func passThroughHit(at screenPoint: NSPoint) -> NotchLyricRowPassThrough.Hit? {
-        guard let frame = cardScreenFrame else { return nil }
+        guard !isVanished, let frame = cardScreenFrame else { return nil }
         let local = CGPoint(x: screenPoint.x - frame.minX, y: frame.maxY - screenPoint.y)
         let top = passThroughBandTop
         return NotchLyricRowPassThrough.Hit(
@@ -1799,7 +1809,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 surfaceFeed.set(true)
                 window?.orderFrontRegardless()
                 // 显式管点击时收起期间设成了放过,指针停着不动也要按此刻的位置对一次。
-                passThrough?.refresh()
+                refreshLyricPassThrough()
             }
             // 先 orderFront 再翻回 false:卡片在已经可见的窗口里从刘海撑开。顺序反了动画会在看不见的窗口里播完。
             if isVanished { isVanished = false }
@@ -2120,7 +2130,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         }
         pendingHoverWork?.cancel()
         pendingHoverWork = nil
-        passThrough?.stop()
+        passThrough?.suspend()
         passThrough = nil
         window?.contentView = nil
         hostingView = nil

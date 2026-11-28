@@ -7,9 +7,8 @@ import SwiftUI
 // 窗口常驻最大尺寸(展开宽 × 展开高,左右和下方再各留 `NotchCardEdge.windowMargin` 给卡片的投影,见控制器 recomputeGeometry),
 // 卡片在里面自己变大变小:这一层把卡片钉成当前该有的尺寸、贴顶居中摆好,并给尺寸变化配弹簧动画(形态切换不走 NSWindow.setFrame)。
 //
-// 卡片以外的透明区域**绝对不能**加任何 background/contentShape:窗口 level 是 .screenSaver(在系统菜单栏之上),透明区正压着
-// 菜单栏和用户的窗口。纯透明区域的点击会穿透到下面;哪怕加一层完全透明的 Color.clear.contentShape(Rectangle()),点击就会被
-// 这扇窗吞掉,用户点不动被盖住的那一段菜单栏(拿同样 flag 的探针窗口实测过)。
+// 窗口 level 是 .screenSaver(在系统菜单栏之上),窗口的透明部分会压住菜单栏或别的应用。
+// NotchLyricRowPassThrough 按当前卡片和指针的位置控制窗口是否放行点击。
 struct NotchWindowRoot: View {
     /// 「暂停/无播放时隐藏」的退场动画:整卡以刘海中心为锚 scale→0 并透明,
     /// 缩进刘海里。 别做成"先播收起弹簧再走"——不要经过暂停收起态,直接从
@@ -227,10 +226,12 @@ struct NotchWindowRoot: View {
             // 收起/弹出时内容整块淡入淡出,由同一条弹簧驱动,跟尺寸变化同步。
             .animation(cardAnimation, value: controller.isCollapsed)
             .onChange(of: controller.isExpanded) { _, expanded in wasExpanded = expanded }
-            // 指针没动、卡片变了(展开、广告开始、行高变了):穿透中的话按指针此刻的位置复查。
+            // 指针没动、卡片变了(展开、广告开始、行高变了):重新判断点击该给哪扇窗。
             .onChange(of: controller.passThroughBandTop) { _, _ in controller.refreshLyricPassThrough() }
             .onChange(of: cardHeight) { _, _ in controller.refreshLyricPassThrough() }
             .onChange(of: cardWidth) { _, _ in controller.refreshLyricPassThrough() }
+            .onChange(of: controller.cardOffset) { _, _ in controller.refreshLyricPassThrough() }
+            .onChange(of: controller.isVanished) { _, _ in controller.refreshLyricPassThrough() }
             .onChange(of: controller.trackDrop != nil) { _, dropping in wasDropping = dropping }
             // 窗口收走(看不见)时把边沿记忆也清掉,跟控制器那边的 resetHoverAfterHide 配对:不清的话下次露面
             // 指针正好在卡片上,移动时不再有「进入」这条边沿,卡片就一直不展开。
