@@ -390,8 +390,19 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private var pendingDrop: (title: String, artist: String, since: Date)?
     /// 掉歌名的判定日志:换了一首、判成要掉时写一行(掉了,或卡片此刻不显示没掉)。
     private static let trackDropLog = Logger(subsystem: "me.yudaotor.lyrimuse", category: "notch-track-drop")
+    /// Space 切换诊断与恢复日志。macOS 27 的问题表现为 occlusion 变成不可见,但没有经过
+    /// 任何 `orderOut`;记录窗口状态可以把这个症状与正常的显隐路径区分开。
+    private static let spaceLog = Logger(subsystem: "me.yudaotor.lyrimuse", category: "notch-space")
     private var screenParamsObserver: NSObjectProtocol?
     private var occlusionObserver: NSObjectProtocol?
+    private var activeSpaceObserver: NSObjectProtocol?
+    private var spaceRecoveryWork: DispatchWorkItem?
+    private var spaceRecoveryVerificationWork: DispatchWorkItem?
+    // Give the Space transition a short settle window while keeping the recovery
+    // inside the user-visible 0.6 s target. The full-screen monitor has a longer
+    // settle window because it reads a private display-space table; this path only
+    // needs the public window state.
+    private static let spaceRecoveryDelay: TimeInterval = 0.2
     // recomputeGeometry 里要把 hostingView 的 frame 也显式设一遍,别只信 autoresizingMask:那条隐式路径下
     // AppKit 层的 frame 跟上了,NSHostingView 内部的 SwiftUI 布局树却不重新走一遍,新撑出来的区域什么都不画。
     private var hostingView: NSHostingView<NotchWindowRoot>?
@@ -436,7 +447,6 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         if presentsOnLockScreen {
             // 先藏着:下面的播放订阅一挂上就会按 isVisible 摆出来,窗口要等挪进锁屏那层之后才露面。
             isVisible = false
-            panel.ignoresMouseEvents = true
         }
 
         // 先算好几何(刘海尺寸、两档卡宽、窗口 frame)再建 hostingView:反过来 SwiftUI 先按声明默认值和占位窗口排一版,
@@ -451,20 +461,20 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         hosting.sizingOptions = []
         panel.contentView = hosting
         hostingView = hosting
-        passThrough = NotchLyricRowPassThrough(
-            window: panel, hostView: hosting,
-            locate: { [weak self] point in self?.passThroughHit(at: point) },
-            onExit: { [weak self] region in if region == .card { self?.setExpandedFromWindow(true) } })
+        if !presentsOnLockScreen {
+            passThrough = NotchLyricRowPassThrough(
+                window: panel, hostView: hosting,
+                locate: { [weak self] point in self?.passThroughHit(at: point) },
+                onCardEnter: { [weak self] in
+                    guard let self, !self.isCardHovered else { return }
+                    self.setExpandedFromWindow(true)
+                })
+        }
         panel.onScrollWheel = { [weak self] event in self?.handleScrollWheel(event) }
 
         // 窗口还没 orderFront 时 occlusionState 也是「不可见」,所以初值保持 true;上屏后系统会补一次通知。
         // 主实例和镜像副本都要挂:每扇窗各管各的树。
-        occlusionObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.didChangeOcclusionStateNotification, object: panel, queue: .main
-        ) { [weak self] note in
-            guard let win = note.object as? NSWindow else { return }
-            MainActor.assumeIsolated { self?.applySurfaceVisible(win.occlusionState.contains(.visible)) }
-        }
+        observeOcclusionState(of: panel)
         // 解锁后系统不一定补发「又看得见了」那条遮挡通知,屏幕锁上 / 解锁时按当下重读一次(11 章决策 188)。
         // 只在窗口在屏上时读:还没 orderFront 时 occlusionState 也是「不可见」。
         WindowSurfaceState.screenChanges.sink { [weak self] in
@@ -492,6 +502,20 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                     self?.refreshFullScreenCover()
                     self?.syncActiveScreenTracking()
                 }
+            }
+        }
+
+        // On macOS 27 a screen-saver-level panel can remain assigned to the Space in
+        // which it was last ordered front, despite `.canJoinAllSpaces`. Delay the check
+        // until the Space transition settles, then reassert only when the panel should
+        // still be visible but reports that it is not on the active Space. Regular
+        // pinned mirrors register too; the separately adopted lock-screen panel is
+        // excluded because replacing it would lose its private lock-screen membership.
+        if !presentsOnLockScreen {
+            activeSpaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.scheduleSpaceRecovery() }
             }
         }
         NotificationCenter.default.publisher(for: Self.debugGeometryChanged)
@@ -911,6 +935,132 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     deinit {
         if let screenParamsObserver { NotificationCenter.default.removeObserver(screenParamsObserver) }
         if let occlusionObserver { NotificationCenter.default.removeObserver(occlusionObserver) }
+        if let activeSpaceObserver { NSWorkspace.shared.notificationCenter.removeObserver(activeSpaceObserver) }
+        spaceRecoveryWork?.cancel()
+        spaceRecoveryVerificationWork?.cancel()
+    }
+
+    private func scheduleSpaceRecovery() {
+        spaceRecoveryWork?.cancel()
+        spaceRecoveryVerificationWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated { self?.recoverAfterSpaceChange() }
+        }
+        spaceRecoveryWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.spaceRecoveryDelay, execute: work)
+    }
+
+    private func recoverAfterSpaceChange() {
+        spaceRecoveryWork = nil
+        // Lock-screen panels are explicitly adopted into a private system Space.
+        // Replacing one with a normal app panel would lose that membership and can
+        // invalidate the retained lock-screen window managed by NotchLockScreenPresenter.
+        guard !presentsOnLockScreen else { return }
+        guard let panel = window as? NotchLyricsWindow else { return }
+
+        let windowIsVisible = panel.isVisible
+        let isOnActiveSpace = panel.isOnActiveSpace
+        let behavior = String(describing: panel.collectionBehavior)
+        let level = panel.level.rawValue
+        let shouldShow = NotchVisibility.shouldShow(
+            isVisible: isVisible, hideWhenNotPlaying: hideWhenNotPlaying,
+            isPlaying: isPlayingNow, alertHold: alertHold, coveredByFullScreen: coveredByFullScreen)
+        Self.spaceLog.notice(
+            "space change settled visible=\(windowIsVisible, privacy: .public) onActiveSpace=\(isOnActiveSpace, privacy: .public) shouldShow=\(shouldShow, privacy: .public) behavior=\(behavior, privacy: .public) level=\(level, privacy: .public)"
+        )
+
+        guard windowIsVisible,
+              NotchVisibility.needsSpaceReassert(
+                  isVisible: isVisible, shouldShow: shouldShow, isOnActiveSpace: isOnActiveSpace) else { return }
+
+        let oldWindowNumber = panel.windowNumber
+        let oldScreenID = panel.screen.flatMap(ScreenIdentity.id(of:)) ?? "unknown"
+        guard let replacement = replacePanelForActiveSpace(from: panel) else { return }
+        let newScreenID = replacement.screen.flatMap(ScreenIdentity.id(of:)) ?? "unknown"
+        Self.spaceLog.notice(
+            "space recovery replaced panel oldWindowNumber=\(oldWindowNumber, privacy: .public) newWindowNumber=\(replacement.windowNumber, privacy: .public) oldScreen=\(oldScreenID, privacy: .public) newScreen=\(newScreenID, privacy: .public)"
+        )
+
+        // isOnActiveSpace may update after the WindowServer transaction. Verify the
+        // replacement after a short turn before deciding whether any further action
+        // is needed.
+        let work = DispatchWorkItem { [weak self, weak panel = replacement] in
+            MainActor.assumeIsolated {
+                guard let self, let panel else { return }
+                self.spaceRecoveryVerificationWork = nil
+                let shouldStillShow = NotchVisibility.shouldShow(
+                    isVisible: self.isVisible, hideWhenNotPlaying: self.hideWhenNotPlaying,
+                    isPlaying: self.isPlayingNow, alertHold: self.alertHold,
+                    coveredByFullScreen: self.coveredByFullScreen)
+                guard panel.isVisible, self.isVisible, shouldStillShow else {
+                    Self.spaceLog.notice("space recovery verification skipped: panel no longer should be visible")
+                    return
+                }
+                guard !panel.isOnActiveSpace else {
+                    Self.spaceLog.notice("space recovery verified onActiveSpace=true")
+                    return
+                }
+
+                Self.spaceLog.error("space recovery replacement is still outside active Space")
+                panel.collectionBehavior = []
+                panel.collectionBehavior = NotchLyricsWindow.spaceCollectionBehavior
+                panel.orderFrontRegardless()
+                self.refreshLyricPassThrough()
+                Self.spaceLog.notice("space recovery retried public Space behavior on replacement panel")
+            }
+        }
+        spaceRecoveryVerificationWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
+    }
+
+    /// A macOS 27 screen-saver-level panel can keep its original Space assignment
+    /// after collection-behavior reassertion and orderOut/orderFront. Creating a fresh
+    /// panel in the active Space while moving the existing hosting view preserves the
+    /// SwiftUI tree (and its playback/lyrics state) but gives WindowServer a new window
+    /// identity. Keep the controller, feed gate and screen frame untouched. Lock-screen
+    /// windows never enter this path because their private Space membership is retained.
+    private func replacePanelForActiveSpace(from oldPanel: NotchLyricsWindow) -> NotchLyricsWindow? {
+        guard let hostingView = oldPanel.contentView else {
+            Self.spaceLog.error("space recovery cannot replace panel without its content view")
+            return nil
+        }
+
+        let frame = oldPanel.frame
+        let replacement = NotchLyricsWindow(contentRect: frame)
+        replacement.setFrame(frame, display: false)
+        replacement.sharingType = AppSettings.shared.notchHideDuringScreenCapture ? .none : .readWrite
+        replacement.onScrollWheel = { [weak self] event in self?.handleScrollWheel(event) }
+
+        NotchEditorialPanel.shared.close(ifOwner: oldPanel)
+        oldPanel.contentView = nil
+        replacement.contentView = hostingView
+        if let occlusionObserver {
+            NotificationCenter.default.removeObserver(occlusionObserver)
+            self.occlusionObserver = nil
+        }
+
+        oldPanel.orderOut(nil)
+        oldPanel.close()
+        // Set after closing the old controller-owned panel so its close notification
+        // cannot clear the newly assigned window from NSWindowController.
+        window = replacement
+        passThrough?.replaceWindow(replacement)
+        observeOcclusionState(of: replacement)
+        replacement.orderFrontRegardless()
+        refreshLyricPassThrough()
+        return replacement
+    }
+
+    private func observeOcclusionState(of panel: NSWindow) {
+        if let occlusionObserver {
+            NotificationCenter.default.removeObserver(occlusionObserver)
+        }
+        occlusionObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeOcclusionStateNotification, object: panel, queue: .main
+        ) { [weak self] note in
+            guard let win = note.object as? NSWindow else { return }
+            MainActor.assumeIsolated { self?.applySurfaceVisible(win.occlusionState.contains(.visible)) }
+        }
     }
 
     private func applySurfaceVisible(_ visible: Bool) {
@@ -920,7 +1070,11 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 看不见了(锁屏、屏保、熄屏;灵动岛在屏保层,别的窗口挡不住它):控制器这份悬停也清掉,跟视图那份
         // (NotchWindowRoot 里 isSurfaceVisible 的 onChange)配对。只清视图那份的话,解锁时指针已经移开,
         // 之后的离开事件都不算边沿,卡片一直停在展开态。
-        if !visible { resetHoverAfterHide() }
+        if visible {
+            refreshLyricPassThrough()
+        } else {
+            resetHoverAfterHide()
+        }
     }
 
     /// 展开态头部快捷操作里那颗 ✕:关掉「灵动岛歌词」总开关。只是 `setVisible(false)`
@@ -1111,12 +1265,15 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 窗口这一侧报指针进了只显示的那一截。
     func beginLyricPassThrough() { passThrough?.begin() }
 
-    /// 卡片尺寸或形态变了,穿透中的话按指针此刻的位置复查。
-    func refreshLyricPassThrough() { passThrough?.refresh() }
+    /// 上屏或卡片形态改变时,按当前指针位置决定接收还是放行。
+    func refreshLyricPassThrough() {
+        guard isSurfaceVisible else { return }
+        passThrough?.refresh()
+    }
 
     /// 屏幕上这一点落在卡片哪一块。
     private func passThroughHit(at screenPoint: NSPoint) -> NotchLyricRowPassThrough.Hit? {
-        guard let frame = cardScreenFrame else { return nil }
+        guard !isVanished, let frame = cardScreenFrame else { return nil }
         let local = CGPoint(x: screenPoint.x - frame.minX, y: frame.maxY - screenPoint.y)
         let top = passThroughBandTop
         return NotchLyricRowPassThrough.Hit(
@@ -1652,7 +1809,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 surfaceFeed.set(true)
                 window?.orderFrontRegardless()
                 // 显式管点击时收起期间设成了放过,指针停着不动也要按此刻的位置对一次。
-                passThrough?.refresh()
+                refreshLyricPassThrough()
             }
             // 先 orderFront 再翻回 false:卡片在已经可见的窗口里从刘海撑开。顺序反了动画会在看不见的窗口里播完。
             if isVanished { isVanished = false }
@@ -1973,7 +2130,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         }
         pendingHoverWork?.cancel()
         pendingHoverWork = nil
-        passThrough?.stop()
+        passThrough?.suspend()
         passThrough = nil
         window?.contentView = nil
         hostingView = nil

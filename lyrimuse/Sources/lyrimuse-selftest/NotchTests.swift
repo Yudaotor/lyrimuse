@@ -2844,16 +2844,48 @@ func runNotchTests() {
                     "可见性契约: 每扇灵动岛窗口(含镜像副本)都监听自己的遮挡变化")
         expectEqual(controller.contains("@Published private(set) var isSurfaceVisible = true"), true,
                     "可见性契约: 初值按可见算(上屏前 occlusionState 也是不可见,不能先停表)")
-        expectEqual(controller.components(separatedBy: "removeObserver(occlusionObserver)").count - 1, 2,
-                    "可见性契约: deinit 与 teardown 两处都摘掉遮挡通知")
+        expectEqual(controller.components(separatedBy: "removeObserver(occlusionObserver)").count - 1, 4,
+                    "可见性契约: deinit、panel 替换前后与 teardown 都摘掉旧遮挡通知")
+        let notchWindow = read("NotchLyricsWindow.swift")
+        expectEqual(controller.contains("forName: NSWorkspace.activeSpaceDidChangeNotification")
+                    && controller.contains("self?.scheduleSpaceRecovery()")
+                    && controller.contains("private static let spaceRecoveryDelay: TimeInterval = 0.2")
+                    && controller.contains("if !presentsOnLockScreen {"), true,
+                    "Space 恢复契约: 普通窗口与镜像监听 Space;锁屏专用窗口不脱离其私有 Space")
+        expectEqual(controller.contains("panel.isOnActiveSpace")
+                    && controller.contains("replacePanelForActiveSpace(from: panel)"), true,
+                    "Space 恢复契约: 诊断当前 Space 状态,不在当前 Space 时替换 panel")
+        let replacementBody: String = {
+            guard let a = controller.range(of: "private func replacePanelForActiveSpace(from oldPanel: NotchLyricsWindow)"),
+                  let b = controller.range(of: "private func observeOcclusionState", range: a.upperBound..<controller.endIndex)
+            else { return "" }
+            return String(controller[a.lowerBound..<b.lowerBound])
+        }()
+        let oldCloseAt = replacementBody.range(of: "oldPanel.close()")?.lowerBound
+        let controllerAssignmentAt = replacementBody.range(of: "window = replacement")?.lowerBound
+        expectEqual(replacementBody.contains("let hostingView = oldPanel.contentView")
+                    && replacementBody.contains("replacement.contentView = hostingView")
+                    && oldCloseAt != nil && controllerAssignmentAt != nil && oldCloseAt! < controllerAssignmentAt!
+                    && replacementBody.contains("replacement.onScrollWheel = { [weak self] event in self?.handleScrollWheel(event) }")
+                    && replacementBody.contains("replacement.setFrame(frame, display: false)")
+                    && replacementBody.contains("replacement.orderFrontRegardless()")
+                    && replacementBody.contains("passThrough?.replaceWindow(replacement)")
+                    && !replacementBody.contains("replacement.ignoresMouseEvents")
+                    && !replacementBody.contains("isVanished =")
+                    && !replacementBody.contains("surfaceFeed.set(false)"), true,
+                    "Space 恢复契约: 新 panel 接管原 hosting view 与穿透状态,不重建播放/歌词树")
+        expectEqual(notchWindow.contains(".canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle"), true,
+                    "Space 恢复契约: 新 panel 保留原 collection behavior")
         expectEqual(controller.contains("let step = NotchVisibility.step(") && controller.contains("let stillShow = NotchVisibility.shouldShow("), true,
                     "显隐契约: 控制器按 Core 的 NotchVisibility 决定显示 / 隐藏,延迟隐藏到点的复核也走同一份")
         expectEqual(controller.contains("(!hideWhenNotPlaying || isPlayingNow || alertHold)")
                     || controller.contains("(!self.hideWhenNotPlaying || PlaybackCoordinator.shared.isPlayingSmoothed"), false,
                     "显隐契约: 控制器里不许再内联写一份「该不该显示」的判据")
+        // 至少两处:立刻判定 + 延迟隐藏到点的复核(换 Space 后的恢复判定也会调 shouldShow)。
+        // 这里守的是「这些路径都带上全屏条件」,不把调用点数量钉死,免得加一条显隐路径就误报。
         expectEqual(controller.components(separatedBy: "coveredByFullScreen: coveredByFullScreen)").count - 1
-                    + controller.components(separatedBy: "coveredByFullScreen: self.coveredByFullScreen)").count - 1, 2,
-                    "全屏契约: 立刻判定与延迟隐藏到点的复核都带上全屏条件")
+                    + controller.components(separatedBy: "coveredByFullScreen: self.coveredByFullScreen)").count - 1 >= 2, true,
+                    "全屏契约: 立刻判定、延迟隐藏到点的复核(以及换 Space 后的恢复判定)都带上全屏条件")
         expectEqual(controller.contains("hiddenForNoLyrics"), false,
                     "无歌词收起契约: 灵动岛没有歌词时只收歌词行,不进显隐判据")
         expectEqual(sourceHas(controller, "AppSettings.shared.$notchCollapseLyricsWhenNoLyrics\n            .combineLatest(PlaybackCoordinator.shared.$currentTrackLacksLyrics)"), true,
@@ -3229,6 +3261,35 @@ func runNotchTests() {
         expectEqual(step(false, last: true, reduce: true), .hideNow, "显隐: 减弱动态效果 = 立刻隐藏")
         expectEqual(step(false, visible: false, last: true, pending: true), .hideNow,
                     "显隐: 等缩回动画期间用户关掉灵动岛 = 立刻隐藏,不等那条动画")
+
+        // Space 恢复(issue #107):换 Space 后窗口不在当前 Space 时,要不要重新声明归属。
+        // 只有「灵动岛开着 + 按显隐逻辑该显示 + 窗口不在当前 Space」三条同时成立才 re-assert;
+        // 其余三类都不要动:未显示、按显隐逻辑应隐藏、已经在当前 Space。
+        func reassert(_ isVisible: Bool, _ shouldShow: Bool, _ isOnActiveSpace: Bool) -> Bool {
+            V.needsSpaceReassert(isVisible: isVisible, shouldShow: shouldShow, isOnActiveSpace: isOnActiveSpace)
+        }
+        // 需要恢复:该在屏上,却被 macOS 27 留在了上一个 Space。
+        expectEqual(reassert(true, true, false), true,
+                    "Space 恢复: 该显示却不在当前 Space = 需要重新声明归属")
+        // 无需恢复:未显示(灵动岛关着 / 窗口没上屏)。isVisible 单独把关,shouldShow 是旧值也不抢着显示。
+        expectEqual(reassert(false, true, false), false,
+                    "Space 恢复: 未显示 = 不叫回来(哪怕 shouldShow 是旧值)")
+        expectEqual(reassert(false, false, false), false,
+                    "Space 恢复: 灵动岛关着 = 不恢复")
+        // 无需恢复:按显隐逻辑此刻应隐藏(暂停时隐藏 / 全屏隐藏等)。
+        expectEqual(reassert(true, false, false), false,
+                    "Space 恢复: 按显隐逻辑应隐藏 = 不恢复,切回桌面走常规显示路径")
+        // 无需恢复:窗口已经跟着切到当前 Space。
+        expectEqual(reassert(true, true, true), false,
+                    "Space 恢复: 已在当前 Space = 不重复叫一次 orderFront")
+        // 八个组合全表:只有 (true, true, false) 这一组为 true。
+        let combos: [(Bool, Bool, Bool)] = [
+            (true, true, true), (true, true, false), (true, false, true), (true, false, false),
+            (false, true, true), (false, true, false), (false, false, true), (false, false, false),
+        ]
+        expectEqual(combos.map { reassert($0.0, $0.1, $0.2) },
+                    [false, true, false, false, false, false, false, false],
+                    "Space 恢复: 八个组合里只有「显示 + 该显示 + 不在当前 Space」要恢复")
     }
 
     // ---- 源码契约:专辑简介的三个入口 ----
@@ -3508,18 +3569,17 @@ func runNotchTests() {
                     "歌词行穿透: 关掉开关时立刻退出穿透")
         expectEqual(app("Settings/AppSettings.swift").contains("static let defaultNotchFadeLyricRowOnHover = false"), true,
                     "歌词行穿透: 「悬浮淡化」默认关")
-        expectEqual(sourceHas(sourceBody("func begin()", in: pass), "window.ignoresMouseEvents = true")
-                        && sourceHas(sourceBody("func begin()", in: pass), "installMonitors()"), true,
-                    "歌词行穿透: 进来时整扇窗穿透、装监听")
-        // ignoresMouseEvents 设过 true 再设回 false,整扇窗连透明处都接点击:穿透结束后按指针位置显式管,别设回 false(05 章决策 126)。
+        expectEqual(sourceHas(sourceBody("func begin()", in: pass), "window.ignoresMouseEvents = true"), true,
+                    "歌词行穿透: 进来时整扇窗穿透")
         expectEqual([pass.contains("ignoresMouseEvents = false"),
-                     sourceHas(sourceBody("func end()", in: pass), "managesHitTesting = true\n syncHitTesting()"),
+                     sourceHas(sourceBody("func end()", in: pass), "syncHitTesting()"),
                      sourceHas(sourceBody("private func syncHitTesting()", in: pass), "let ignores = hit.region == .outside"),
                      sourceHas(sourceBody("private func syncHitTesting()", in: pass), "if hit.region == .passThrough, hit.bandTop != nil {\n begin()"),
-                     sourceHas(sourceBody("func stop()", in: pass), "monitors.forEach(NSEvent.removeMonitor)"),
-                     sourceHas(ctrl, "passThrough?.stop()\n passThrough = nil")],
-                    [false, true, true, true, true, true],
-                    "歌词行穿透: 离开后不把整扇窗设回接点击,改按指针位置收放(卡片上收、透明区放、只显示那一截转去穿透);窗口收掉才卸监听")
+                     sourceHas(ctrl, "passThrough?.suspend()\n passThrough = nil"),
+                     sourceHas(ctrl, "if !presentsOnLockScreen {\n passThrough = NotchLyricRowPassThrough("),
+                     window.contains("ignoresMouseEvents = true")],
+                    [false, true, true, true, true, true, true],
+                    "歌词行穿透: 窗口起初放行点击,上屏后按卡片位置收放;锁屏窗口不接指针")
         expectEqual(sourceHas(sourceBody("func end()", in: pass), "debugPointer = nil"), true,
                     "歌词行穿透: 穿透结束时清掉模拟的指针,下次真指针进来不再按它判")
         expectEqual(sourceHas(sourceBody("private func animateBand(", in: pass), "CATransaction.setDisableActions(true)"), true,
@@ -3528,9 +3588,11 @@ func runNotchTests() {
                         && !root.contains(".mask"), true,
                     "歌词行穿透: 淡化只在穿透期间挂在 layer 上,SwiftUI 里不常驻遮罩")
         expectEqual(sourceHas(sourceBody("private func resetHoverAfterHide()", in: ctrl), "passThrough?.suspend()")
-                        && sourceHas(sourceBody("func suspend()", in: pass), "end()\nmonitors.forEach(NSEvent.removeMonitor)\nmonitors.removeAll()")
-                        && sourceHas(sourceBody("func refresh()", in: pass), "if managesHitTesting, window?.isVisible == true { installMonitors() }"), true,
-                    "歌词行穿透: 窗口收起时退出穿透、卸掉全局指针监听,重新露面再装回来")
+                        && sourceHas(sourceBody("func suspend()", in: pass), "monitors.forEach(NSEvent.removeMonitor)\nmonitors.removeAll()\nfallbackTimer?.invalidate()")
+                        && sourceHas(sourceBody("private func installMonitors()", in: pass), "guard monitors.isEmpty, fallbackTimer == nil else { return }")
+                        && sourceHas(sourceBody("func refresh()", in: pass), "guard window?.isVisible == true else { return }\nif !managesHitTesting {\nmanagesHitTesting = true\ninstallMonitors()")
+                        && sourceHas(sourceBody("private func applySurfaceVisible(", in: ctrl), "if visible {\nrefreshLyricPassThrough()"), true,
+                    "歌词行穿透: 第一次上屏就装监听,隐藏时停掉监听和兜底计时器,重新露面再装回来")
         expectEqual(ctrl.contains("LyrimuseActionRunner.perform(.nextTrackHotkey)")
                     && ctrl.contains("VolumeMonitor.adjustSystemVolume(by: delta)"), true,
                     "灵动岛五项: 切歌走快捷键那一条(先查自动化权限),音量调的是系统音量")
@@ -3830,7 +3892,8 @@ func runNotchTests() {
         let playingAt = initBody.range(of: "PlaybackCoordinator.shared.$isPlayingSmoothed.sink")?.lowerBound
         expectEqual(hiddenAt != nil && playingAt != nil && hiddenAt! < playingAt!
                         && initBody.contains("if presentsOnLockScreen {")
-                        && sourceHas(initBody, "isVisible = false\n panel.ignoresMouseEvents = true\n }"), true,
+                        && sourceHas(initBody, "if !presentsOnLockScreen {\n passThrough = NotchLyricRowPassThrough(")
+                        && src("NotchLyricsWindow.swift").contains("ignoresMouseEvents = true"), true,
                     "锁屏显示: 锁屏那份先藏着(挪进锁屏那层之前不露面)、不接鼠标")
         expectEqual(sourceHas(presenter, "let instance = NotchLyricsWindowController(pinnedScreenID: screenID, presentsOnLockScreen: true)\n guard let window = instance.window, LockScreenSpace.adopt(window) else {")
                         && presenter.components(separatedBy: ".teardown()").count - 1 == 1
