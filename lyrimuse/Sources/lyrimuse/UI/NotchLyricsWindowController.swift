@@ -513,14 +513,6 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             ) { [weak self] _ in
                 MainActor.assumeIsolated { self?.scheduleSpaceRecovery() }
             }
-            FullScreenSpaceMonitor.shared.$isSpaceTransitionPending
-                .removeDuplicates()
-                .dropFirst()
-                .filter { !$0 }
-                .sink { [weak self] _ in
-                    MainActor.assumeIsolated { self?.recoverWhenSpaceTransitionSettles() }
-                }
-                .store(in: &subscriptions)
         }
         NotificationCenter.default.publisher(for: Self.debugGeometryChanged)
             .sink { [weak self] _ in MainActor.assumeIsolated { self?.recomputeGeometry(animate: false) } }
@@ -954,15 +946,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.spaceRecoveryDelay, execute: work)
     }
 
-    private func recoverWhenSpaceTransitionSettles() {
-        spaceRecoveryWork?.cancel()
-        spaceRecoveryWork = nil
-        recoverAfterSpaceChange()
-    }
-
     private func recoverAfterSpaceChange() {
         spaceRecoveryWork = nil
-        guard !FullScreenSpaceMonitor.shared.isSpaceTransitionPending else { return }
         // Lock-screen panels are explicitly adopted into a private system Space.
         // Replacing one with a normal app panel would lose that membership and can
         // invalidate the retained lock-screen window managed by NotchLockScreenPresenter.
